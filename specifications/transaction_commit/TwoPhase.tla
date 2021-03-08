@@ -40,6 +40,29 @@ VARIABLES
     (* time has no effect.)                                                *)
     (***********************************************************************)
 
+(********************** TYPE ANNOTATIONS FOR APALACHE ************************)
+\* operator for type annotations
+a <: b == a
+
+MessageType == [
+    type |-> STRING,
+    rm |-> STRING
+]
+
+\* RMStateType == [
+\*     type |-> STRING,
+\*     rm |-> STRING
+\* ]
+AsMessage(s) == s <: MessageType
+AsSetMessage(s) == s <: {MessageType}
+AsSetString(s) == s <: {STRING}
+
+(******************* END OF TYPE ANNOTATIONS FOR APALACHE ********************)
+
+PreparedMessage == AsSetMessage([type : {"Prepared"}, rm : RM])
+CommitMessage == AsSetMessage([type : {"Commit"}])
+AbortMessage == AsSetMessage([type : {"Abort"}])
+
 Message ==
   (*************************************************************************)
   (* The set of all possible messages.  Messages of type $"Prepared"$ are  *)
@@ -48,14 +71,14 @@ Message ==
   (* be received by all RMs.  The set $msgs$ contains just a single copy   *)
   (* of such a message.                                                    *)
   (*************************************************************************)
-  [type : {"Prepared"}, rm : RM]  \cup  [type : {"Commit", "Abort"}]
-   
+  PreparedMessage \union CommitMessage \union AbortMessage
+
 TPTypeOK ==  
   (*************************************************************************)
   (* The type-correctness invariant                                        *)
   (*************************************************************************)
-  /\ rmState \in [RM -> {"working", "prepared", "committed", "aborted"}]
-  /\ tmState \in {"init", "committed", "aborted"}
+  /\ rmState \in [RM -> AsSetString({"working", "prepared", "committed", "aborted"})]
+  /\ tmState \in AsSetString({"init", "committed", "aborted"})
   /\ tmPrepared \subseteq RM
   /\ msgs \subseteq Message
 
@@ -65,8 +88,8 @@ TPInit ==
   (*************************************************************************)
   /\ rmState = [rm \in RM |-> "working"]
   /\ tmState = "init"
-  /\ tmPrepared   = {}
-  /\ msgs = {}
+  /\ tmPrepared   = AsSetString({})
+  /\ msgs = AsSetMessage({})
 -----------------------------------------------------------------------------
 (***************************************************************************)
 (* We now define the actions that may be performed by the processes, first *)
@@ -77,8 +100,8 @@ TMRcvPrepared(rm) ==
   (* The TM receives a $"Prepared"$ message from resource manager $rm$.    *)
   (*************************************************************************)
   /\ tmState = "init"
-  /\ [type |-> "Prepared", rm |-> rm] \in msgs
-  /\ tmPrepared' = tmPrepared \cup {rm}
+  /\ AsMessage([type |-> "Prepared", rm |-> rm]) \in msgs
+  /\ tmPrepared' = tmPrepared \cup AsSetString({rm})
   /\ UNCHANGED <<rmState, tmState, msgs>>
 
 TMCommit ==
@@ -89,7 +112,7 @@ TMCommit ==
   /\ tmState = "init"
   /\ tmPrepared = RM
   /\ tmState' = "committed"
-  /\ msgs' = msgs \cup {[type |-> "Commit"]}
+  /\ msgs' = msgs \cup AsSetMessage({[type |-> "Commit"]})
   /\ UNCHANGED <<rmState, tmPrepared>>
 
 TMAbort ==
@@ -98,7 +121,7 @@ TMAbort ==
   (*************************************************************************)
   /\ tmState = "init"
   /\ tmState' = "aborted"
-  /\ msgs' = msgs \cup {[type |-> "Abort"]}
+  /\ msgs' = msgs \cup AsSetMessage({[type |-> "Abort"]})
   /\ UNCHANGED <<rmState, tmPrepared>>
 
 RMPrepare(rm) == 
@@ -107,7 +130,7 @@ RMPrepare(rm) ==
   (*************************************************************************)
   /\ rmState[rm] = "working"
   /\ rmState' = [rmState EXCEPT ![rm] = "prepared"]
-  /\ msgs' = msgs \cup {[type |-> "Prepared", rm |-> rm]}
+  /\ msgs' = msgs \cup AsSetMessage({[type |-> "Prepared", rm |-> rm]})
   /\ UNCHANGED <<tmState, tmPrepared>>
   
 RMChooseToAbort(rm) ==
@@ -123,7 +146,7 @@ RMRcvCommitMsg(rm) ==
   (*************************************************************************)
   (* Resource manager $rm$ is told by the TM to commit.                    *)
   (*************************************************************************)
-  /\ [type |-> "Commit"] \in msgs
+  /\ AsMessage([type |-> "Commit"]) \in msgs
   /\ rmState' = [rmState EXCEPT ![rm] = "committed"]
   /\ UNCHANGED <<tmState, tmPrepared, msgs>>
 
@@ -131,7 +154,7 @@ RMRcvAbortMsg(rm) ==
   (*************************************************************************)
   (* Resource manager $rm$ is told by the TM to abort.                     *)
   (*************************************************************************)
-  /\ [type |-> "Abort"] \in msgs
+  /\ AsMessage([type |-> "Abort"]) \in msgs
   /\ rmState' = [rmState EXCEPT ![rm] = "aborted"]
   /\ UNCHANGED <<tmState, tmPrepared, msgs>>
 
